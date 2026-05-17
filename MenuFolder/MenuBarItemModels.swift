@@ -142,7 +142,7 @@ final class AccessibilityMenuBarItemController: MenuBarItemProviding, MenuBarIte
         }
 
         rememberRestoreOriginIfNeeded(for: item)
-        move(item, to: CGPoint(x: -10_000, y: frame.origin.y), report: &report)
+        move(item, to: hiddenOrigin(for: frame), report: &report)
     }
 
     private func restore(_ item: AccessibilityMenuBarItem, report: inout MenuBarItemHidingReport) -> Bool {
@@ -195,6 +195,16 @@ final class AccessibilityMenuBarItemController: MenuBarItemProviding, MenuBarIte
             return visibleOrigin
         }
         return item.descriptor.frame?.origin ?? .zero
+    }
+
+    private func hiddenOrigin(for frame: CGRect) -> CGPoint {
+        let leftmostScreenEdge = NSScreen.screens
+            .map(\.frame.minX)
+            .min() ?? 0
+        return CGPoint(
+            x: leftmostScreenEdge - frame.width - 16,
+            y: frame.origin.y
+        )
     }
 
     private func rememberRestoreOriginIfNeeded(for item: AccessibilityMenuBarItem) {
