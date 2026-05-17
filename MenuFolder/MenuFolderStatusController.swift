@@ -80,6 +80,15 @@ final class MenuFolderStatusController: NSObject {
         windowCoordinator.showPermissionsWindow()
     }
 
+    @objc private func revealHiddenItems() {
+        if permissionsManager.hasRequiredPermissions {
+            hidingController.restoreHiddenItems()
+            updateStatusImage()
+        } else {
+            windowCoordinator.showPermissionsWindow()
+        }
+    }
+
     @objc private func quit() {
         hidingController.restoreHiddenItems()
         NSApp.terminate(nil)
@@ -95,6 +104,11 @@ final class MenuFolderStatusController: NSObject {
         menu.addItem(NSMenuItem(
             title: "Permissions...",
             action: #selector(showPermissionsWindow),
+            keyEquivalent: ""
+        ))
+        menu.addItem(NSMenuItem(
+            title: "Reveal Hidden Items",
+            action: #selector(revealHiddenItems),
             keyEquivalent: ""
         ))
         menu.addItem(.separator())
