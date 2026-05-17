@@ -222,6 +222,11 @@ final class AccessibilityMenuBarItemController: MenuBarItemProviding, MenuBarIte
     }
 
     private func persistRestoreOrigins() {
+        guard !restoreOriginsByID.isEmpty else {
+            UserDefaults.standard.removeObject(forKey: Keys.restoreOriginsByItemID)
+            return
+        }
+
         let storedOrigins = restoreOriginsByID.mapValues { StoredMenuBarItemOrigin(point: $0) }
         guard let data = try? JSONEncoder().encode(storedOrigins) else {
             return
