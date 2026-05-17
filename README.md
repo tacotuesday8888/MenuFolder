@@ -46,7 +46,7 @@ MenuFolder is a menu-bar-only AppKit agent with a native `NSStatusItem` and smal
 
 macOS does not let one app literally own another app's `NSStatusItem`. MenuFolder works the way menu bar organizers usually do: it keeps its own folder icon visible, detects other menu bar extras, then moves selected extras.
 
-It detects menu bar extras through each running app's Accessibility `AXExtrasMenuBar`, stores the user's hidden item IDs in `UserDefaults`, and attempts to move selected items off-screen while collapsed. Clicking the folder icon lays the hidden items out inline to the left of the folder icon; clicking again collapses them. When the app quits, it restores hidden items to their saved original positions.
+It detects menu bar extras through each running app's Accessibility `AXExtrasMenuBar`, stores the user's hidden item IDs and restore positions in `UserDefaults`, and attempts to move selected items off-screen while collapsed. Clicking the folder icon lays the hidden items out inline to the left of the folder icon; clicking again collapses them. When the app quits, it restores hidden items to their saved original positions.
 
 ## Contributing
 

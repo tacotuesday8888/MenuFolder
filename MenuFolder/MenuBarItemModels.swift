@@ -67,11 +67,19 @@ protocol MenuBarItemHiding {
 }
 
 final class AccessibilityMenuBarItemController: MenuBarItemProviding, MenuBarItemHiding {
+    private enum Keys {
+        static let restoreOriginsByItemID = "MenuFolder.restoreOriginsByItemID"
+    }
+
     var expansionAnchorFrameProvider: (() -> CGRect?)?
 
     private var cachedItemsByID: [String: AccessibilityMenuBarItem] = [:]
     private var restoreOriginsByID: [String: CGPoint] = [:]
     private var lastVisibleOriginsByID: [String: CGPoint] = [:]
+
+    init() {
+        restoreOriginsByID = Self.loadRestoreOrigins()
+    }
 
     func currentItems() -> [MenuBarItemDescriptor] {
         let items = enumerateItems()
@@ -103,7 +111,7 @@ final class AccessibilityMenuBarItemController: MenuBarItemProviding, MenuBarIte
                 hide(item, report: &report)
             } else if restoreOriginsByID[item.descriptor.id] != nil {
                 if restore(item, report: &report) {
-                    restoreOriginsByID[item.descriptor.id] = nil
+                    forgetRestoreOrigin(for: item.descriptor.id)
                 }
             }
         }
@@ -120,7 +128,7 @@ final class AccessibilityMenuBarItemController: MenuBarItemProviding, MenuBarIte
 
         for item in items where hiddenItemIDs.contains(item.descriptor.id) || restoreOriginsByID[item.descriptor.id] != nil {
             if restore(item, report: &report) {
-                restoreOriginsByID[item.descriptor.id] = nil
+                forgetRestoreOrigin(for: item.descriptor.id)
             }
         }
 
@@ -133,9 +141,7 @@ final class AccessibilityMenuBarItemController: MenuBarItemProviding, MenuBarIte
             return
         }
 
-        if restoreOriginsByID[item.descriptor.id] == nil {
-            restoreOriginsByID[item.descriptor.id] = originalVisibleOrigin(for: item)
-        }
+        rememberRestoreOriginIfNeeded(for: item)
         move(item, to: CGPoint(x: -10_000, y: frame.origin.y), report: &report)
     }
 
@@ -169,9 +175,7 @@ final class AccessibilityMenuBarItemController: MenuBarItemProviding, MenuBarIte
                 continue
             }
 
-            if restoreOriginsByID[item.descriptor.id] == nil {
-                restoreOriginsByID[item.descriptor.id] = originalVisibleOrigin(for: item)
-            }
+            rememberRestoreOriginIfNeeded(for: item)
 
             let width = max(frame.width, 1)
             let targetOrigin = CGPoint(
@@ -191,6 +195,37 @@ final class AccessibilityMenuBarItemController: MenuBarItemProviding, MenuBarIte
             return visibleOrigin
         }
         return item.descriptor.frame?.origin ?? .zero
+    }
+
+    private func rememberRestoreOriginIfNeeded(for item: AccessibilityMenuBarItem) {
+        guard restoreOriginsByID[item.descriptor.id] == nil else {
+            return
+        }
+
+        restoreOriginsByID[item.descriptor.id] = originalVisibleOrigin(for: item)
+        persistRestoreOrigins()
+    }
+
+    private func forgetRestoreOrigin(for itemID: String) {
+        restoreOriginsByID[itemID] = nil
+        persistRestoreOrigins()
+    }
+
+    private func persistRestoreOrigins() {
+        let storedOrigins = restoreOriginsByID.mapValues { StoredMenuBarItemOrigin(point: $0) }
+        guard let data = try? JSONEncoder().encode(storedOrigins) else {
+            return
+        }
+        UserDefaults.standard.set(data, forKey: Keys.restoreOriginsByItemID)
+    }
+
+    private static func loadRestoreOrigins() -> [String: CGPoint] {
+        guard let data = UserDefaults.standard.data(forKey: Keys.restoreOriginsByItemID),
+              let storedOrigins = try? JSONDecoder().decode([String: StoredMenuBarItemOrigin].self, from: data) else {
+            return [:]
+        }
+
+        return storedOrigins.mapValues(\.point)
     }
 
     private func rememberVisibleOrigins(for items: [AccessibilityMenuBarItem]) {
@@ -500,6 +535,20 @@ private struct RawAccessibilityMenuBarItem {
     let element: AXUIElement
     let title: String
     let frame: CGRect
+}
+
+private struct StoredMenuBarItemOrigin: Codable {
+    let x: CGFloat
+    let y: CGFloat
+
+    var point: CGPoint {
+        CGPoint(x: x, y: y)
+    }
+
+    init(point: CGPoint) {
+        x = point.x
+        y = point.y
+    }
 }
 
 private extension String {
