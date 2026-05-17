@@ -1,0 +1,30 @@
+# macOS
+.DS_Store
+
+# Xcode
+DerivedData/
+build/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+xcuserdata/
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# Archives and signing artifacts
+*.xcarchive
+*.ipa
+*.dSYM.zip
+*.dSYM
+*.mobileprovision
+*.cer
+*.p12
+
+# Local configuration
+*.local
+.env
+.env.*
