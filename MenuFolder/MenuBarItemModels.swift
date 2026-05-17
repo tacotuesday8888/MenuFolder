@@ -45,6 +45,7 @@ protocol MenuBarItemProviding {
 
 protocol MenuBarItemHiding {
     func applyHiddenState(hiddenItemIDs: Set<String>, isExpanded: Bool)
+    func restoreHiddenItems(hiddenItemIDs: Set<String>)
 }
 
 final class AccessibilityMenuBarItemController: MenuBarItemProviding, MenuBarItemHiding {
@@ -79,6 +80,16 @@ final class AccessibilityMenuBarItemController: MenuBarItemProviding, MenuBarIte
         }
     }
 
+    func restoreHiddenItems(hiddenItemIDs: Set<String>) {
+        let items = enumerateItems()
+        cachedItemsByID = Dictionary(uniqueKeysWithValues: items.map { ($0.descriptor.id, $0) })
+
+        for item in items where hiddenItemIDs.contains(item.descriptor.id) || restoreOriginsByID[item.descriptor.id] != nil {
+            restore(item)
+            restoreOriginsByID[item.descriptor.id] = nil
+        }
+    }
+
     private func hide(_ item: AccessibilityMenuBarItem) {
         guard let frame = item.descriptor.frame else {
             return
@@ -89,7 +100,7 @@ final class AccessibilityMenuBarItemController: MenuBarItemProviding, MenuBarIte
         }
         setPosition(
             CGPoint(x: -10_000, y: frame.origin.y),
-            for: item.element
+            for: item
         )
     }
 
@@ -98,7 +109,7 @@ final class AccessibilityMenuBarItemController: MenuBarItemProviding, MenuBarIte
             return
         }
 
-        setPosition(origin, for: item.element)
+        setPosition(origin, for: item)
     }
 
     private func enumerateItems() -> [AccessibilityMenuBarItem] {
@@ -243,17 +254,26 @@ final class AccessibilityMenuBarItemController: MenuBarItemProviding, MenuBarIte
         return CGRect(origin: origin, size: size)
     }
 
-    private func setPosition(_ position: CGPoint, for element: AXUIElement) {
+    private func setPosition(_ position: CGPoint, for item: AccessibilityMenuBarItem) {
         var mutablePosition = position
         guard let axValue = AXValueCreate(.cgPoint, &mutablePosition) else {
             return
         }
 
-        AXUIElementSetAttributeValue(
-            element,
+        let result = AXUIElementSetAttributeValue(
+            item.element,
             kAXPositionAttribute as CFString,
             axValue
         )
+
+        if result != .success {
+            NSLog(
+                "MenuFolder could not move menu bar item '%@' from '%@': AX error %d",
+                item.descriptor.displayName,
+                item.descriptor.ownerName,
+                result.rawValue
+            )
+        }
     }
 
     private static func copyElementAttribute(

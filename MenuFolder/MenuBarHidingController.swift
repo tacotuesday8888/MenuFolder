@@ -35,4 +35,10 @@ final class MenuBarHidingController: ObservableObject {
         )
         refreshDetectedItems()
     }
+
+    func restoreHiddenItems() {
+        itemHider.restoreHiddenItems(hiddenItemIDs: hiddenItemsStore.hiddenItemIDs)
+        isExpanded = true
+        refreshDetectedItems()
+    }
 }

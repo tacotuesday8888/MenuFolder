@@ -72,6 +72,7 @@ final class MenuFolderStatusController: NSObject {
     }
 
     @objc private func quit() {
+        hidingController.restoreHiddenItems()
         NSApp.terminate(nil)
     }
 
