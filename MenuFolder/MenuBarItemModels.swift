@@ -10,7 +10,6 @@ struct MenuBarItemDescriptor: Identifiable, Hashable {
     let bundleIdentifier: String?
     let processIdentifier: pid_t?
     let frame: CGRect?
-    let isPlaceholder: Bool
 
     init(
         id: String,
@@ -18,8 +17,7 @@ struct MenuBarItemDescriptor: Identifiable, Hashable {
         ownerName: String,
         bundleIdentifier: String? = nil,
         processIdentifier: pid_t? = nil,
-        frame: CGRect? = nil,
-        isPlaceholder: Bool = false
+        frame: CGRect? = nil
     ) {
         self.id = id
         self.displayName = displayName
@@ -27,7 +25,6 @@ struct MenuBarItemDescriptor: Identifiable, Hashable {
         self.bundleIdentifier = bundleIdentifier
         self.processIdentifier = processIdentifier
         self.frame = frame
-        self.isPlaceholder = isPlaceholder
     }
 
     static func == (lhs: MenuBarItemDescriptor, rhs: MenuBarItemDescriptor) -> Bool {
