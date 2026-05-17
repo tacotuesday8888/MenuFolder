@@ -4,6 +4,7 @@ import Foundation
 final class MenuBarHidingController: ObservableObject {
     @Published private(set) var isExpanded = false
     @Published private(set) var detectedItems: [MenuBarItemDescriptor] = []
+    @Published private(set) var moveFailuresByItemID: [String: String] = [:]
 
     private let itemProvider: MenuBarItemProviding
     private let itemHider: MenuBarItemHiding
@@ -29,15 +30,17 @@ final class MenuBarHidingController: ObservableObject {
     }
 
     func applyHiddenState() {
-        itemHider.applyHiddenState(
+        let report = itemHider.applyHiddenState(
             hiddenItemIDs: hiddenItemsStore.hiddenItemIDs,
             isExpanded: isExpanded
         )
+        moveFailuresByItemID = report.failedItemMessagesByID
         refreshDetectedItems()
     }
 
     func restoreHiddenItems() {
-        itemHider.restoreHiddenItems(hiddenItemIDs: hiddenItemsStore.hiddenItemIDs)
+        let report = itemHider.restoreHiddenItems(hiddenItemIDs: hiddenItemsStore.hiddenItemIDs)
+        moveFailuresByItemID = report.failedItemMessagesByID
         isExpanded = true
         refreshDetectedItems()
     }

@@ -43,73 +43,179 @@ protocol MenuBarItemProviding {
     func currentItems() -> [MenuBarItemDescriptor]
 }
 
+struct MenuBarItemHidingReport {
+    var movedItemIDs: Set<String> = []
+    var failedItemMessagesByID: [String: String] = [:]
+
+    var hasFailures: Bool {
+        !failedItemMessagesByID.isEmpty
+    }
+
+    mutating func recordMove(for itemID: String) {
+        movedItemIDs.insert(itemID)
+        failedItemMessagesByID[itemID] = nil
+    }
+
+    mutating func recordFailure(_ message: String, for itemID: String) {
+        failedItemMessagesByID[itemID] = message
+    }
+}
+
 protocol MenuBarItemHiding {
-    func applyHiddenState(hiddenItemIDs: Set<String>, isExpanded: Bool)
-    func restoreHiddenItems(hiddenItemIDs: Set<String>)
+    func applyHiddenState(hiddenItemIDs: Set<String>, isExpanded: Bool) -> MenuBarItemHidingReport
+    func restoreHiddenItems(hiddenItemIDs: Set<String>) -> MenuBarItemHidingReport
 }
 
 final class AccessibilityMenuBarItemController: MenuBarItemProviding, MenuBarItemHiding {
+    var expansionAnchorFrameProvider: (() -> CGRect?)?
+
     private var cachedItemsByID: [String: AccessibilityMenuBarItem] = [:]
     private var restoreOriginsByID: [String: CGPoint] = [:]
+    private var lastVisibleOriginsByID: [String: CGPoint] = [:]
 
     func currentItems() -> [MenuBarItemDescriptor] {
         let items = enumerateItems()
         cachedItemsByID = Dictionary(uniqueKeysWithValues: items.map { ($0.descriptor.id, $0) })
+        rememberVisibleOrigins(for: items)
         return items.map(\.descriptor)
     }
 
-    func applyHiddenState(hiddenItemIDs: Set<String>, isExpanded: Bool) {
+    func applyHiddenState(hiddenItemIDs: Set<String>, isExpanded: Bool) -> MenuBarItemHidingReport {
         let items = enumerateItems()
         cachedItemsByID = Dictionary(uniqueKeysWithValues: items.map { ($0.descriptor.id, $0) })
+        rememberVisibleOrigins(for: items)
+
+        var report = MenuBarItemHidingReport()
+
+        if isExpanded {
+            let selectedItems = items.filter { hiddenItemIDs.contains($0.descriptor.id) }
+            expand(selectedItems, report: &report)
+        }
 
         for item in items {
-            let shouldHideItem = hiddenItemIDs.contains(item.descriptor.id)
+            let isSelected = hiddenItemIDs.contains(item.descriptor.id)
 
-            guard shouldHideItem || restoreOriginsByID[item.descriptor.id] != nil else {
+            if isExpanded && isSelected {
                 continue
             }
 
-            if isExpanded {
-                restore(item)
-            } else if shouldHideItem {
-                hide(item)
-            } else {
-                restore(item)
+            if isSelected {
+                hide(item, report: &report)
+            } else if restoreOriginsByID[item.descriptor.id] != nil {
+                if restore(item, report: &report) {
+                    restoreOriginsByID[item.descriptor.id] = nil
+                }
+            }
+        }
+
+        return report
+    }
+
+    func restoreHiddenItems(hiddenItemIDs: Set<String>) -> MenuBarItemHidingReport {
+        let items = enumerateItems()
+        cachedItemsByID = Dictionary(uniqueKeysWithValues: items.map { ($0.descriptor.id, $0) })
+        rememberVisibleOrigins(for: items)
+
+        var report = MenuBarItemHidingReport()
+
+        for item in items where hiddenItemIDs.contains(item.descriptor.id) || restoreOriginsByID[item.descriptor.id] != nil {
+            if restore(item, report: &report) {
                 restoreOriginsByID[item.descriptor.id] = nil
             }
         }
+
+        return report
     }
 
-    func restoreHiddenItems(hiddenItemIDs: Set<String>) {
-        let items = enumerateItems()
-        cachedItemsByID = Dictionary(uniqueKeysWithValues: items.map { ($0.descriptor.id, $0) })
-
-        for item in items where hiddenItemIDs.contains(item.descriptor.id) || restoreOriginsByID[item.descriptor.id] != nil {
-            restore(item)
-            restoreOriginsByID[item.descriptor.id] = nil
-        }
-    }
-
-    private func hide(_ item: AccessibilityMenuBarItem) {
+    private func hide(_ item: AccessibilityMenuBarItem, report: inout MenuBarItemHidingReport) {
         guard let frame = item.descriptor.frame else {
+            report.recordFailure("MenuFolder could not read this item's position.", for: item.descriptor.id)
             return
         }
 
         if restoreOriginsByID[item.descriptor.id] == nil {
-            restoreOriginsByID[item.descriptor.id] = frame.origin
+            restoreOriginsByID[item.descriptor.id] = originalVisibleOrigin(for: item)
         }
-        setPosition(
-            CGPoint(x: -10_000, y: frame.origin.y),
-            for: item
-        )
+        move(item, to: CGPoint(x: -10_000, y: frame.origin.y), report: &report)
     }
 
-    private func restore(_ item: AccessibilityMenuBarItem) {
+    private func restore(_ item: AccessibilityMenuBarItem, report: inout MenuBarItemHidingReport) -> Bool {
         guard let origin = restoreOriginsByID[item.descriptor.id] else {
+            return true
+        }
+
+        return move(item, to: origin, report: &report)
+    }
+
+    private func expand(_ selectedItems: [AccessibilityMenuBarItem], report: inout MenuBarItemHidingReport) {
+        guard !selectedItems.isEmpty else {
             return
         }
 
-        setPosition(origin, for: item)
+        let sortedItems = selectedItems.sorted { lhs, rhs in
+            originalVisibleOrigin(for: lhs).x < originalVisibleOrigin(for: rhs).x
+        }
+        guard let anchorFrame = expansionAnchorFrameProvider?() else {
+            for item in sortedItems {
+                _ = restore(item, report: &report)
+            }
+            return
+        }
+
+        var nextRightEdge = anchorFrame.minX
+        for item in sortedItems.reversed() {
+            guard let frame = item.descriptor.frame else {
+                report.recordFailure("MenuFolder could not read this item's position.", for: item.descriptor.id)
+                continue
+            }
+
+            if restoreOriginsByID[item.descriptor.id] == nil {
+                restoreOriginsByID[item.descriptor.id] = originalVisibleOrigin(for: item)
+            }
+
+            let width = max(frame.width, 1)
+            let targetOrigin = CGPoint(
+                x: nextRightEdge - width,
+                y: originalVisibleOrigin(for: item).y
+            )
+            nextRightEdge = targetOrigin.x
+            move(item, to: targetOrigin, report: &report)
+        }
+    }
+
+    private func originalVisibleOrigin(for item: AccessibilityMenuBarItem) -> CGPoint {
+        if let restoreOrigin = restoreOriginsByID[item.descriptor.id] {
+            return restoreOrigin
+        }
+        if let visibleOrigin = lastVisibleOriginsByID[item.descriptor.id] {
+            return visibleOrigin
+        }
+        return item.descriptor.frame?.origin ?? .zero
+    }
+
+    private func rememberVisibleOrigins(for items: [AccessibilityMenuBarItem]) {
+        for item in items {
+            guard let frame = item.descriptor.frame,
+                  frame.minX >= 0 else {
+                continue
+            }
+            lastVisibleOriginsByID[item.descriptor.id] = frame.origin
+        }
+    }
+
+    @discardableResult
+    private func move(
+        _ item: AccessibilityMenuBarItem,
+        to position: CGPoint,
+        report: inout MenuBarItemHidingReport
+    ) -> Bool {
+        guard setPosition(position, for: item) else {
+            report.recordFailure("macOS refused to move this item.", for: item.descriptor.id)
+            return false
+        }
+
+        report.recordMove(for: item.descriptor.id)
+        return true
     }
 
     private func enumerateItems() -> [AccessibilityMenuBarItem] {
@@ -254,10 +360,10 @@ final class AccessibilityMenuBarItemController: MenuBarItemProviding, MenuBarIte
         return CGRect(origin: origin, size: size)
     }
 
-    private func setPosition(_ position: CGPoint, for item: AccessibilityMenuBarItem) {
+    private func setPosition(_ position: CGPoint, for item: AccessibilityMenuBarItem) -> Bool {
         var mutablePosition = position
         guard let axValue = AXValueCreate(.cgPoint, &mutablePosition) else {
-            return
+            return false
         }
 
         let result = AXUIElementSetAttributeValue(
@@ -273,7 +379,14 @@ final class AccessibilityMenuBarItemController: MenuBarItemProviding, MenuBarIte
                 item.descriptor.ownerName,
                 result.rawValue
             )
+            return false
         }
+
+        guard let updatedPosition = Self.pointAttribute(kAXPositionAttribute as CFString, from: item.element) else {
+            return true
+        }
+
+        return abs(updatedPosition.x - position.x) <= 1 && abs(updatedPosition.y - position.y) <= 1
     }
 
     private static func copyElementAttribute(

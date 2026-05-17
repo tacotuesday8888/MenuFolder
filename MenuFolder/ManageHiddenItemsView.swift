@@ -14,12 +14,21 @@ struct ManageHiddenItemsView: View {
                 } else {
                     List(hidingController.detectedItems) { item in
                         Toggle(isOn: binding(for: item.id)) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(item.displayName)
-                                    .font(.body)
-                                Text(item.ownerName)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                            HStack(spacing: 8) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(item.displayName)
+                                        .font(.body)
+                                    Text(item.ownerName)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+
+                                if let failureMessage = hidingController.moveFailuresByItemID[item.id] {
+                                    Spacer(minLength: 8)
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .foregroundStyle(.orange)
+                                        .help(failureMessage)
+                                }
                             }
                         }
                     }

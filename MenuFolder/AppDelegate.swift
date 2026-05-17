@@ -25,11 +25,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        let statusController = statusController
+        menuBarItemController.expansionAnchorFrameProvider = { [weak statusController] in
+            statusController?.statusItemFrame
+        }
+        statusController.start()
         hidingController.refreshDetectedItems()
         if permissionsManager.hasRequiredPermissions {
             hidingController.applyHiddenState()
         }
-        statusController.start()
 
         if !hiddenItemsStore.hasShownPermissionsWelcome || !permissionsManager.hasRequiredPermissions {
             hiddenItemsStore.hasShownPermissionsWelcome = true

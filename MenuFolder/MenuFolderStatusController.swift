@@ -8,6 +8,15 @@ final class MenuFolderStatusController: NSObject {
 
     private var permissionsTimer: Timer?
 
+    var statusItemFrame: CGRect? {
+        guard let button = statusItem.button,
+              let window = button.window else {
+            return nil
+        }
+
+        return window.convertToScreen(button.bounds)
+    }
+
     init(
         permissionsManager: PermissionsManager,
         hidingController: MenuBarHidingController,
