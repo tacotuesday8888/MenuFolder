@@ -71,7 +71,7 @@ struct ManageHiddenItemsView: View {
                 .foregroundStyle(.secondary)
             Text("No menu bar items detected")
                 .font(.headline)
-            Text("Check Screen Recording permission, then refresh.")
+            Text("Check Accessibility permission, then refresh.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

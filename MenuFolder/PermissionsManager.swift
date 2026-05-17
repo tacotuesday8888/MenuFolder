@@ -8,6 +8,10 @@ final class PermissionsManager: ObservableObject {
     @Published private(set) var hasScreenRecordingPermission = false
 
     var hasRequiredPermissions: Bool {
+        hasAccessibilityPermission
+    }
+
+    var hasAllRequestedPermissions: Bool {
         hasAccessibilityPermission && hasScreenRecordingPermission
     }
 

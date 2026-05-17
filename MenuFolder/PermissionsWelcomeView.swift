@@ -35,7 +35,7 @@ struct PermissionsWelcomeView: View {
             Text("Welcome to MenuFolder")
                 .font(.title2.weight(.semibold))
 
-            Text("MenuFolder needs two macOS permissions before it can organize menu bar icons.")
+            Text("MenuFolder needs Accessibility permission to organize menu bar icons; Screen Recording may improve detection on some macOS versions.")
                 .foregroundStyle(.secondary)
         }
     }
@@ -52,7 +52,7 @@ struct PermissionsWelcomeView: View {
 
             PermissionRow(
                 title: "Screen Recording",
-                message: "Screen Recording lets MenuFolder find menu bar icons and their positions.",
+                message: "Screen Recording helps MenuFolder read screen metadata when macOS requires it.",
                 isGranted: permissionsManager.hasScreenRecordingPermission,
                 buttonTitle: "Open Screen Recording Settings",
                 action: permissionsManager.openScreenRecordingSettings

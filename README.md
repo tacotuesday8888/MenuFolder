@@ -34,9 +34,9 @@ xcodebuild -project MenuFolder.xcodeproj -scheme MenuFolder -configuration Debug
 
 ## Permissions
 
-MenuFolder needs Accessibility permission to move menu bar icons you choose.
+MenuFolder needs Accessibility permission to detect and move the menu bar icons you choose.
 
-MenuFolder needs Screen Recording permission to detect menu bar icons and their positions.
+MenuFolder may ask for Screen Recording permission to read screen metadata on macOS versions or configurations that require it. The current v0.1 movement path is Accessibility-based.
 
 The app opens the matching System Settings panes from the first-run permissions screen. MenuFolder does not include analytics, telemetry, accounts, or network calls.
 

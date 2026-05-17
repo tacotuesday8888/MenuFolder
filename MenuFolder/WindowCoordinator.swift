@@ -24,7 +24,16 @@ final class WindowCoordinator {
 
         if permissionsWindow == nil {
             let view = PermissionsWelcomeView(permissionsManager: permissionsManager) { [weak self] in
-                self?.permissionsWindow?.close()
+                guard let self else {
+                    return
+                }
+
+                self.permissionsManager.refresh()
+                if self.permissionsManager.hasRequiredPermissions {
+                    self.hidingController.refreshDetectedItems()
+                    self.hidingController.applyHiddenState()
+                }
+                self.permissionsWindow?.close()
             }
             permissionsWindow = makeWindow(
                 title: "MenuFolder Permissions",

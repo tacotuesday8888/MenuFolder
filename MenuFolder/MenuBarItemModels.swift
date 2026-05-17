@@ -1,6 +1,7 @@
 import AppKit
 import ApplicationServices
 import CoreGraphics
+import Darwin
 import Foundation
 
 struct MenuBarItemDescriptor: Identifiable, Hashable {
@@ -267,23 +268,125 @@ final class AccessibilityMenuBarItemController: MenuBarItemProviding, MenuBarIte
 
     private func enumerateItems() -> [AccessibilityMenuBarItem] {
         let menuFolderBundleIdentifier = Bundle.main.bundleIdentifier
-        let runningApplications = NSWorkspace.shared.runningApplications
-            .filter { app in
-                app.processIdentifier > 0
-                    && !app.isTerminated
-                    && app.bundleIdentifier != menuFolderBundleIdentifier
-            }
+        let candidates = Self.candidateMenuBarItemOwners(
+            excludingBundleIdentifier: menuFolderBundleIdentifier
+        )
 
         var rawItems = [RawAccessibilityMenuBarItem]()
-        for app in runningApplications {
-            rawItems.append(contentsOf: Self.menuBarItems(for: app))
+        for candidate in candidates {
+            rawItems.append(contentsOf: Self.menuBarItems(for: candidate))
         }
 
         return Self.uniqueItems(from: rawItems.sorted(by: Self.menuBarSort))
     }
 
-    private static func menuBarItems(for app: NSRunningApplication) -> [RawAccessibilityMenuBarItem] {
-        let appElement = AXUIElementCreateApplication(app.processIdentifier)
+    private static func candidateMenuBarItemOwners(
+        excludingBundleIdentifier excludedBundleIdentifier: String?
+    ) -> [MenuBarItemOwnerCandidate] {
+        let currentProcessIdentifier = pid_t(ProcessInfo.processInfo.processIdentifier)
+        var candidatesByPID = [pid_t: MenuBarItemOwnerCandidate]()
+
+        func insert(processIdentifier: pid_t, app: NSRunningApplication? = nil) {
+            guard processIdentifier > 0,
+                  processIdentifier != currentProcessIdentifier else {
+                return
+            }
+
+            let runningApplication = app ?? NSRunningApplication(processIdentifier: processIdentifier)
+            guard runningApplication?.isTerminated != true,
+                  runningApplication?.bundleIdentifier != excludedBundleIdentifier else {
+                return
+            }
+
+            let processName = processName(for: processIdentifier)
+            let ownerName = runningApplication?.localizedName
+                ?? processName
+                ?? runningApplication?.bundleIdentifier
+                ?? "Process \(processIdentifier)"
+
+            candidatesByPID[processIdentifier] = MenuBarItemOwnerCandidate(
+                processIdentifier: processIdentifier,
+                ownerName: ownerName,
+                bundleIdentifier: runningApplication?.bundleIdentifier
+            )
+        }
+
+        for app in NSWorkspace.shared.runningApplications {
+            insert(processIdentifier: app.processIdentifier, app: app)
+        }
+
+        // Agent-style menu extras can be missing from NSWorkspace's app list.
+        for pid in allProcessIdentifiers() {
+            insert(processIdentifier: pid)
+        }
+
+        for pid in windowServerProcessIdentifiers() {
+            insert(processIdentifier: pid)
+        }
+
+        return candidatesByPID.values.sorted { lhs, rhs in
+            if lhs.processIdentifier == rhs.processIdentifier {
+                return false
+            }
+
+            return lhs.processIdentifier < rhs.processIdentifier
+        }
+    }
+
+    private static func allProcessIdentifiers() -> Set<pid_t> {
+        let processCount = proc_listallpids(nil, 0)
+        guard processCount > 0 else {
+            return []
+        }
+
+        var processIdentifiers = [pid_t](repeating: 0, count: Int(processCount))
+        let bytesWritten = processIdentifiers.withUnsafeMutableBufferPointer { buffer in
+            proc_listallpids(
+                buffer.baseAddress,
+                Int32(buffer.count * MemoryLayout<pid_t>.stride)
+            )
+        }
+        guard bytesWritten > 0 else {
+            return []
+        }
+
+        let returnedCount = min(
+            Int(bytesWritten) / MemoryLayout<pid_t>.stride,
+            processIdentifiers.count
+        )
+        return Set(processIdentifiers.prefix(returnedCount).filter { $0 > 0 })
+    }
+
+    private static func windowServerProcessIdentifiers() -> Set<pid_t> {
+        let options = CGWindowListOption(arrayLiteral: .optionAll)
+        guard let windowInfoList = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else {
+            return []
+        }
+
+        return Set(windowInfoList.compactMap { windowInfo in
+            guard let ownerProcessIdentifier = windowInfo[kCGWindowOwnerPID as String] as? Int,
+                  ownerProcessIdentifier > 0 else {
+                return nil
+            }
+
+            return pid_t(ownerProcessIdentifier)
+        })
+    }
+
+    private static func processName(for processIdentifier: pid_t) -> String? {
+        var nameBuffer = [CChar](repeating: 0, count: 1024)
+        let result = nameBuffer.withUnsafeMutableBufferPointer { buffer in
+            proc_name(processIdentifier, buffer.baseAddress, UInt32(buffer.count))
+        }
+        guard result > 0 else {
+            return nil
+        }
+
+        return String(cString: nameBuffer).menuFolderTrimmed.nilIfEmpty
+    }
+
+    private static func menuBarItems(for candidate: MenuBarItemOwnerCandidate) -> [RawAccessibilityMenuBarItem] {
+        let appElement = AXUIElementCreateApplication(candidate.processIdentifier)
         guard let extrasMenuBar = copyElementAttribute(
             kAXExtrasMenuBarAttribute as CFString,
             from: appElement
@@ -304,20 +407,19 @@ final class AccessibilityMenuBarItemController: MenuBarItemProviding, MenuBarIte
             }
 
             let title = copyStringAttribute(kAXTitleAttribute as CFString, from: child) ?? ""
-            let ownerName = app.localizedName ?? app.bundleIdentifier ?? "Unknown App"
             let displayName = displayName(
                 title: title,
-                ownerName: ownerName,
-                bundleIdentifier: app.bundleIdentifier
+                ownerName: candidate.ownerName,
+                bundleIdentifier: candidate.bundleIdentifier
             )
 
             return RawAccessibilityMenuBarItem(
                 descriptor: MenuBarItemDescriptor(
                     id: "",
                     displayName: displayName,
-                    ownerName: ownerName,
-                    bundleIdentifier: app.bundleIdentifier,
-                    processIdentifier: app.processIdentifier,
+                    ownerName: candidate.ownerName,
+                    bundleIdentifier: candidate.bundleIdentifier,
+                    processIdentifier: candidate.processIdentifier,
                     frame: frame
                 ),
                 element: child,
@@ -419,6 +521,13 @@ final class AccessibilityMenuBarItemController: MenuBarItemProviding, MenuBarIte
             axValue
         )
 
+        let updatedPosition = Self.pointAttribute(kAXPositionAttribute as CFString, from: item.element)
+        if let updatedPosition,
+           abs(updatedPosition.x - position.x) <= 1,
+           abs(updatedPosition.y - position.y) <= 1 {
+            return true
+        }
+
         if result != .success {
             NSLog(
                 "MenuFolder could not move menu bar item '%@' from '%@': AX error %d",
@@ -429,11 +538,7 @@ final class AccessibilityMenuBarItemController: MenuBarItemProviding, MenuBarIte
             return false
         }
 
-        guard let updatedPosition = Self.pointAttribute(kAXPositionAttribute as CFString, from: item.element) else {
-            return true
-        }
-
-        return abs(updatedPosition.x - position.x) <= 1 && abs(updatedPosition.y - position.y) <= 1
+        return updatedPosition == nil
     }
 
     private static func copyElementAttribute(
@@ -540,6 +645,12 @@ final class AccessibilityMenuBarItemController: MenuBarItemProviding, MenuBarIte
 private struct AccessibilityMenuBarItem {
     let descriptor: MenuBarItemDescriptor
     let element: AXUIElement
+}
+
+private struct MenuBarItemOwnerCandidate {
+    let processIdentifier: pid_t
+    let ownerName: String
+    let bundleIdentifier: String?
 }
 
 private struct RawAccessibilityMenuBarItem {

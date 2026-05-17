@@ -55,11 +55,9 @@ final class MenuFolderStatusController: NSObject {
     }
 
     @objc private func handleStatusItemClick(_ sender: NSStatusBarButton) {
-        guard let event = NSApp.currentEvent else {
-            return
-        }
+        let event = NSApp.currentEvent
 
-        if event.type == .rightMouseUp {
+        if event?.type == .rightMouseUp {
             showContextMenu()
             return
         }
