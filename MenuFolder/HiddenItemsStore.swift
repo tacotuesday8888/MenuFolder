@@ -28,11 +28,13 @@ final class HiddenItemsStore: ObservableObject {
     }
 
     func setHidden(_ isHidden: Bool, for itemID: String) {
+        var updatedIDs = hiddenItemIDs
         if isHidden {
-            hiddenItemIDs.insert(itemID)
+            updatedIDs.insert(itemID)
         } else {
-            hiddenItemIDs.remove(itemID)
+            updatedIDs.remove(itemID)
         }
+        hiddenItemIDs = updatedIDs
         persistHiddenItemIDs()
     }
 

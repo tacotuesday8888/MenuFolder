@@ -10,7 +10,9 @@ Screenshot coming soon.
 
 ## Status
 
-MenuFolder is currently in v0.1 Phase 1. The app shell, menu bar icon, permissions screen, management window wiring, documentation, and CI are in place. The real hide/show mechanism is stubbed for Phase 2.
+MenuFolder is currently in an early v0.1 build. The app shell, menu bar icon, permissions screen, management window, live menu bar item detection, persisted hidden selections, and first hide/restore path are in place.
+
+Some Apple-controlled menu extras may refuse movement. MenuFolder fails quietly for those items rather than forcing unsafe behavior.
 
 ## Install
 
@@ -40,9 +42,9 @@ The app opens the matching System Settings panes from the first-run permissions 
 
 ## How It Works
 
-Phase 1 creates the menu-bar-only app foundation with a native `NSStatusItem`, SwiftUI windows for permissions and management, and persistent placeholder hidden item selections.
+MenuFolder is a menu-bar-only AppKit agent with a native `NSStatusItem` and small SwiftUI windows for permissions and item management.
 
-Phase 2 will add live menu bar item detection and the actual hide/show implementation. The movement strategy is intentionally not locked in yet.
+It detects menu bar extras through each running app's Accessibility `AXExtrasMenuBar`, stores the user's hidden item IDs in `UserDefaults`, and attempts to move selected items off-screen while collapsed. Clicking the folder icon restores saved positions; clicking again collapses them.
 
 ## Contributing
 

@@ -3,9 +3,11 @@ import AppKit
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let permissionsManager = PermissionsManager()
     private let hiddenItemsStore = HiddenItemsStore()
+    private let menuBarItemController = AccessibilityMenuBarItemController()
 
     private lazy var hidingController = MenuBarHidingController(
-        itemProvider: PlaceholderMenuBarItemProvider(),
+        itemProvider: menuBarItemController,
+        itemHider: menuBarItemController,
         hiddenItemsStore: hiddenItemsStore
     )
 
@@ -24,6 +26,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         hidingController.refreshDetectedItems()
+        if permissionsManager.hasRequiredPermissions {
+            hidingController.applyHiddenState()
+        }
         statusController.start()
 
         if !hiddenItemsStore.hasShownPermissionsWelcome || !permissionsManager.hasRequiredPermissions {

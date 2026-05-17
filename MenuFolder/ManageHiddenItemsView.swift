@@ -8,27 +8,35 @@ struct ManageHiddenItemsView: View {
         VStack(alignment: .leading, spacing: 16) {
             header
 
-            List(hidingController.detectedItems) { item in
-                Toggle(isOn: binding(for: item.id)) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(item.displayName)
-                            .font(.body)
-                        Text(item.ownerName)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+            Group {
+                if hidingController.detectedItems.isEmpty {
+                    emptyState
+                } else {
+                    List(hidingController.detectedItems) { item in
+                        Toggle(isOn: binding(for: item.id)) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(item.displayName)
+                                    .font(.body)
+                                Text(item.ownerName)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
                     }
                 }
             }
             .frame(minHeight: 180)
 
             HStack {
-                Button("Refresh") {
+                Button {
                     hidingController.refreshDetectedItems()
+                } label: {
+                    Label("Refresh", systemImage: "arrow.clockwise")
                 }
 
                 Spacer()
 
-                Text("Phase 1 placeholder list")
+                Text(itemCountText)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -45,6 +53,25 @@ struct ManageHiddenItemsView: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "menubar.rectangle")
+                .font(.system(size: 28))
+                .foregroundStyle(.secondary)
+            Text("No menu bar items detected")
+                .font(.headline)
+            Text("Check Screen Recording permission, then refresh.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var itemCountText: String {
+        let count = hidingController.detectedItems.count
+        return count == 1 ? "1 item detected" : "\(count) items detected"
     }
 
     private func binding(for itemID: String) -> Binding<Bool> {

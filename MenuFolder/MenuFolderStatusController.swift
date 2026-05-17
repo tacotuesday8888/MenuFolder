@@ -36,7 +36,12 @@ final class MenuFolderStatusController: NSObject {
     }
 
     func refreshPermissionsState() {
+        let hadRequiredPermissions = permissionsManager.hasRequiredPermissions
         permissionsManager.refresh()
+        if !hadRequiredPermissions && permissionsManager.hasRequiredPermissions {
+            hidingController.refreshDetectedItems()
+            hidingController.applyHiddenState()
+        }
         updateStatusImage()
     }
 
